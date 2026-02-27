@@ -1,0 +1,37 @@
+# 火灾烟雾检测数据集配置
+# 数据集来源：
+#   - D-Fire Dataset（CC0 1.0）：https://github.com/gaia-solutions-on-demand/DFireDataset
+#   - gengyanlei 数据集（MIT）：https://github.com/gengyanlei/fire-smoke-detect-yolov4
+#
+# 预期目录结构：
+#   PaddleDetection/dataset/fire_detection/
+#   ├── images/
+#   │   ├── train/    # 训练图片（D-Fire + gengyanlei 混合）
+#   │   └── val/      # 验证图片
+#   └── annotations/
+#       ├── train.json  # COCO 格式标注（含 fire/smoke 两类）
+#       └── val.json
+#
+# 重要：加入背景负样本（官方实验证明可将误检率从 11% 降至 1.1%）
+# 背景图放入 images/train/，在 train.json 中对应条目的 annotations 列表为空即可
+
+metric: COCO
+num_classes: 2  # fire, smoke
+
+TrainDataset:
+  !COCODataSet
+    image_dir: images/train
+    anno_path: annotations/train.json
+    dataset_dir: dataset/fire_detection/
+    data_fields: ['image', 'gt_bbox', 'gt_class', 'is_crowd']
+
+EvalDataset:
+  !COCODataSet
+    image_dir: images/val
+    anno_path: annotations/val.json
+    dataset_dir: dataset/fire_detection/
+
+TestDataset:
+  !ImageFolder
+    anno_path: annotations/val.json
+    dataset_dir: dataset/fire_detection/

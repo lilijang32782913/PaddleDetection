@@ -6,8 +6,8 @@ _BASE_: [
   '_base_/picodet_416_reader.yml',
 ]
 
-pretrain_weights: ""
-weights: /root/AIWork/SmartCamera/PaddleDetection/paddleyolo_demo/models/PicoDet-S-Standard/picodet_s_416_coco_lcnet.pdparams
+pretrain_weights: https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/legendary_models/PPLCNet_x0_75_pretrained.pdparams
+weights: output/picodet_s_416_coco/best_model
 find_unused_parameters: True
 use_ema: true
 epoch: 300
