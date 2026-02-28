@@ -74,7 +74,7 @@ TrainReader:
   batch_size: 16
   shuffle: true
   drop_last: true
-  use_shared_memory: true
+  use_shared_memory: false
   collate_batch: true
 
 EvalReader:

@@ -275,7 +275,7 @@ class CSPPAN(nn.Layer):
             self.spatial_scales.append(self.spatial_scales[-1] / 2)
 
         # build top-down blocks
-        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        self.upsample = nn.Upsample(scale_factor=2.0, mode='nearest')
         self.top_down_blocks = nn.LayerList()
         for idx in range(len(in_channels) - 1, 0, -1):
             self.top_down_blocks.append(

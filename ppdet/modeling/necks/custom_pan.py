@@ -375,8 +375,12 @@ class CustomCSPPAN(nn.Layer):
 
             if i < self.num_blocks - 1:
                 route = self.fpn_routes[i](route)
+                # 用显式 size 替代 scale_factor，避免 PIR FloatAttribute 兼容问题
+                _h = route.shape[2] * 2
+                _w = route.shape[3] * 2
                 route = F.interpolate(
-                    route, scale_factor=2., data_format=self.data_format)
+                    route, size=[_h, _w], mode='nearest',
+                    data_format=self.data_format)
 
         pan_feats = [fpn_feats[-1], ]
         route = fpn_feats[-1]
