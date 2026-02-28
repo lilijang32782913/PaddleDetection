@@ -32,6 +32,10 @@ weights: output/ppyoloe_plus_crn_s_80e_fire_detection/model_final
 # 由 04_train.sh 通过 -o pretrain_weights=... 覆盖
 pretrain_weights: pretrain_weights/ppyoloe_plus_crn_s_80e_coco.pdparams
 
+# ── GPU 加速（RTX 5070 Ti Laptop Blackwell sm_120）──
+# 必须显式设置，否则 train.py 默认 use_gpu=False 导致 CUDA error
+use_gpu: True
+
 # PP-YOLOE+_s 网络尺寸参数（固定，勿修改）
 depth_mult: 0.33
 width_mult: 0.50
@@ -60,23 +64,21 @@ TrainReader:
     - RandomCrop: {}
     - RandomFlip: {}
   batch_transforms:
-    # 多尺度训练（CPU训练优化：使用小分辨率范围加速~2.5x）
-    # GPU训练可改回: [416, 448, 480, 512, 544, 576, 608, 640]
-    - BatchRandomResize: {target_size: [288, 320, 352, 384],
+    # 多尺度训练（GPU全尺寸：416-640px，覆盖小目标和正常目标）
+    - BatchRandomResize: {target_size: [416, 448, 480, 512, 544, 576, 608, 640],
                           random_size: True, random_interp: True, keep_ratio: False}
     - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
     - Permute: {}
     - PadGT: {}
-  # CPU训练：batch_size=16(小图内存充裕)；worker_num 由 ppyoloe_plus_reader.yml 全局设为 0
-  # GPU训练（12GB显存）可改为 batch_size: 32（worker_num 改回 4）
+  # GPU训练（RTX 5070 Ti 12GB）：batch_size=16，640px多尺度
   batch_size: 16
   shuffle: true
   drop_last: true
-  use_shared_memory: false
+  use_shared_memory: true
   collate_batch: true
 
 EvalReader:
-  batch_size: 2
+  batch_size: 4
 
 TestReader:
   inputs_def:

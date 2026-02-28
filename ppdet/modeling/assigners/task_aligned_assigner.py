@@ -182,7 +182,8 @@ class TaskAlignedAssigner(nn.Layer):
         assigned_scores = paddle.index_select(
             assigned_scores, paddle.to_tensor(ind), axis=-1)
         # rescale alignment metrics
-        alignment_metrics *= mask_positive
+        # NOTE: Non-inplace for Blackwell sm_120 compatibility
+        alignment_metrics = alignment_metrics * mask_positive
         max_metrics_per_instance = alignment_metrics.max(axis=-1, keepdim=True)
         max_ious_per_instance = (ious * mask_positive).max(axis=-1,
                                                            keepdim=True)

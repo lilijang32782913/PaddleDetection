@@ -1,4 +1,4 @@
-worker_num: 0  # CPU训练设为0：主进程加载数据，无子进程fork，彻底避免OOM-Killed
+worker_num: 4  # GPU训练：多进程数据加载，充分利用 CPU 并行预处理
 eval_height: &eval_height 640
 eval_width: &eval_width 640
 eval_size: &eval_size [*eval_height, *eval_width]
@@ -18,7 +18,7 @@ TrainReader:
   batch_size: 8
   shuffle: true
   drop_last: true
-  use_shared_memory: false
+  use_shared_memory: true
   collate_batch: true
 
 EvalReader:

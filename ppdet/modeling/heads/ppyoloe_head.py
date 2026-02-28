@@ -400,6 +400,12 @@ class PPYOLOEHead(nn.Layer):
         gt_labels = gt_meta['gt_class']
         gt_bboxes = gt_meta['gt_bbox']
         pad_gt_mask = gt_meta['pad_gt_mask']
+        # NOTE: force float32 to avoid mixed float64/float32 type promotion
+        # which causes CUDA error(700) on Blackwell sm_120 GPUs
+        if gt_bboxes.dtype != paddle.float32:
+            gt_bboxes = gt_bboxes.astype('float32')
+        if pad_gt_mask.dtype != paddle.float32:
+            pad_gt_mask = pad_gt_mask.astype('float32')
         # label assignment
         if gt_meta['epoch_id'] < self.static_assigner_epoch:
             assigned_labels, assigned_bboxes, assigned_scores = \
@@ -462,7 +468,7 @@ class PPYOLOEHead(nn.Layer):
                             bg_index=self.num_classes)
             alpha_l = -1
         # rescale bbox
-        assigned_bboxes /= stride_tensor
+        assigned_bboxes = assigned_bboxes / stride_tensor
 
         assign_out_dict = self.get_loss_from_assign(
             pred_scores, pred_distri, pred_bboxes, anchor_points_s,
