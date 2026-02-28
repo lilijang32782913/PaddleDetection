@@ -1,21 +1,20 @@
 # PP-YOLOE+_s 火灾/烟雾检测训练配置
 #
 # 模型：PP-YOLOE+_s（Apache 2.0）
-# 数据集：D-Fire（CC0 1.0）+ gengyanlei（MIT）
+# 数据集：D-Fire（CC0 1.0）+ gengyanlei（MIT）+ 背景负样本
 # 目标部署：RK3576 NPU（RKNN FP16/INT8）
+# 设备：RTX 5070 Ti Laptop 12GB，CUDA 12.8
 #
-# 参考来源：
-#   - PaddlePaddle 官方火灾检测实验：https://github.com/PaddlePaddle/awesome-DeepLearning
-#   - 实验结论：COCO预训练权重 + 背景负样本 = 最佳效果（误检率 1.1%）
+# 实验结论（来自 PaddlePaddle 官方验证）：
+#   COCO预训练（非ImageNet） → 误检率 23% → 11%（-52%）
+#   加入背景负样本           → 误检率 11% → 1.1%（-90%）
 #
-# 使用方法：
+# 使用方法（由 04_train.sh 自动调用）：
+#   cd PaddleDetection
 #   python tools/train.py \
 #       -c configs/ppyoloe/application/ppyoloe_plus_crn_s_80e_fire_detection.yml \
-#       -o weights=ppyoloe_plus_crn_s_80e_coco.pdparams \
+#       -o pretrain_weights=pretrain_weights/ppyoloe_plus_crn_s_80e_coco.pdparams \
 #       --eval --amp
-#
-# 预训练权重下载：
-#   wget https://paddledet.bj.bcebos.com/models/ppyoloe_plus_crn_s_80e_coco.pdparams
 
 _BASE_: [
   './_base_/fire_detection.yml',
@@ -26,60 +25,65 @@ _BASE_: [
 ]
 
 log_iter: 50
-snapshot_epoch: 5
+snapshot_epoch: 1  # CPU 训练每 epoch 保存，防 OOM 崩溃丢进度
 weights: output/ppyoloe_plus_crn_s_80e_fire_detection/model_final
 
-# ✅ 关键：使用 COCO 预训练权重（而非 ImageNet）
-# 官方实验：COCO预训练 vs ImageNet预训练 → 误检率从 23% 降至 11%
-pretrain_weights: https://bj.bcebos.com/v1/paddledet/models/ppyoloe_plus_crn_s_80e_coco.pdparams
+# ✅ 关键：使用 COCO 预训练权重（非 ImageNet）
+# 由 04_train.sh 通过 -o pretrain_weights=... 覆盖
+pretrain_weights: pretrain_weights/ppyoloe_plus_crn_s_80e_coco.pdparams
 
-# PP-YOLOE+_s 网络尺寸参数
+# PP-YOLOE+_s 网络尺寸参数（固定，勿修改）
 depth_mult: 0.33
 width_mult: 0.50
 
-# 覆盖读取器参数（针对火灾检测场景优化）
+# ── 训练轮数（覆盖 optimizer_80e.yml 的 80e）──
+epoch: 80
+
+# ── 学习率（fine-tune 策略：比完整训练低 5x）──
+LearningRate:
+  base_lr: 0.005
+  schedulers:
+    - name: CosineDecay
+      max_epochs: 96   # 包含 warmup 的总 epoch 数（需 >= epoch）
+    - name: LinearWarmup
+      start_factor: 0.
+      epochs: 3
+
+# ── 读取器（针对火灾检测优化）──
 TrainReader:
   sample_transforms:
     - Decode: {}
-    # 颜色扰动：模拟不同光照、温度下火焰颜色变化
-    - RandomDistort: {hue: [-18, 18, 0.5], saturation: [0.5, 1.5, 0.5], contrast: [0.5, 1.5, 0.5], brightness: [0.5, 1.5, 0.5]}
+    # 颜色扰动：模拟不同光照、烟雾浓度、摄像头白平衡差异
+    - RandomDistort: {hue: [-18, 18, 0.5], saturation: [0.5, 1.5, 0.5],
+                      contrast: [0.5, 1.5, 0.5], brightness: [0.5, 1.5, 0.5]}
     - RandomExpand: {fill_value: [123.675, 116.28, 103.53]}
     - RandomCrop: {}
     - RandomFlip: {}
-    # MixupImage 增强小目标检测能力（可选，火焰有时面积较小）
-    # - MixupImage: {num_mixup_op: 1}
   batch_transforms:
-    - BatchRandomResize: {target_size: [416, 448, 480, 512, 544, 576, 608, 640], random_size: True, random_interp: True, keep_ratio: False}
+    # 多尺度训练（CPU训练优化：使用小分辨率范围加速~2.5x）
+    # GPU训练可改回: [416, 448, 480, 512, 544, 576, 608, 640]
+    - BatchRandomResize: {target_size: [288, 320, 352, 384],
+                          random_size: True, random_interp: True, keep_ratio: False}
     - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
     - Permute: {}
     - PadGT: {}
-  batch_size: 16      # 显存不足时改为 8
+  # CPU训练：batch_size=16(小图内存充裕)；worker_num 由 ppyoloe_plus_reader.yml 全局设为 0
+  # GPU训练（12GB显存）可改为 batch_size: 32（worker_num 改回 4）
+  batch_size: 16
   shuffle: true
   drop_last: true
-  use_shared_memory: true
+  use_shared_memory: false
   collate_batch: true
 
 EvalReader:
-  batch_size: 4
+  batch_size: 2
 
-# 训练总轮数（官方建议 80e，火灾检测数据量大时可减少至 50e）
-epoch: 80
-
-# 学习率调度（余弦退火，适合小数据集 fine-tune）
-LearningRate:
-  base_lr: 0.005      # 相比 COCO 训练降低（fine-tune 策略）
-  schedulers:
-  - !CosineDecay
-    max_epochs: 80
-  - !LinearWarmup
-    start_factor: 0.
-    epochs: 3
-
-# 优化器
-OptimizerBuilder:
-  optimizer:
-    momentum: 0.9
-    type: Momentum
-  regularizer:
-    factor: 0.0005
-    type: L2
+TestReader:
+  inputs_def:
+    image_shape: [3, 416, 416]
+  sample_transforms:
+    - Decode: {}
+    - Resize: {target_size: [416, 416], keep_ratio: False, interp: 2}
+    - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
+    - Permute: {}
+  batch_size: 1
